@@ -23,7 +23,6 @@ export default function AdminLoginPage() {
       return
     }
 
-    // Verifica se é admin
     const { data: { user } } = await supabase.auth.getUser()
     const { data: profile } = await supabase
       .from('profiles')
@@ -31,14 +30,18 @@ export default function AdminLoginPage() {
       .eq('id', user!.id)
       .single()
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'super_admin' && profile?.role !== 'professional') {
       await supabase.auth.signOut()
       setError('Acesso negado. Esta área é restrita.')
       setLoading(false)
       return
     }
 
-    router.push('/admin')
+    if (profile?.role === 'super_admin') {
+      router.push('/admin')
+    } else {
+      router.push('/profissional')
+    }
   }
 
   return (

@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { createCalendarEvent } from '@/lib/calendar'
 
 type Appointment = {
   id: string
   scheduled_at: string
   status: string
-  notes: string
   services: { name: string; duration_minutes: number; price: number }
   profiles: { full_name: string; phone: string }
 }
@@ -17,22 +17,18 @@ export default function AdminPage() {
   const router = useRouter()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled' | 'completed'>('all')
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/admin/login'); return }
 
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+        .from('profiles').select('role').eq('id', user.id).single()
 
-      if (profile?.role !== 'admin') { router.push('/'); return }
+      if (profile?.role !== 'super_admin') { router.push('/'); return }
 
       const { data } = await supabase
         .from('appointments')
@@ -48,164 +44,171 @@ export default function AdminPage() {
   async function handleStatus(id: string, status: string) {
     const supabase = createClient()
     await supabase.from('appointments').update({ status }).eq('id', id)
-    setAppointments(prev =>
-      prev.map(a => a.id === id ? { ...a, status } : a)
-    )
+    const app = appointments.find(a => a.id === id)
+    
+    if (status === 'confirmed' && app) {
+      await createCalendarEvent(
+        app.profiles.full_name, 
+        app.services.name, 
+        app.scheduled_at, 
+        app.services.duration_minutes
+      )
+    }
+    
+    setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a))
   }
-
-  async function handleComplete(id: string) {
-  const supabase = createClient()
-  const completedAt = new Date().toISOString()
-  await supabase.from('appointments')
-    .update({ status: 'completed', completed_at: completedAt })
-    .eq('id', id)
-  setAppointments(prev =>
-    prev.map(a => a.id === id ? { ...a, status: 'completed', completed_at: completedAt } : a)
-  )
-}
 
   const statusLabel: Record<string, string> = {
-    pending: '⏳ Pendente',
-    confirmed: '✅ Confirmado',
-    cancelled: '❌ Cancelado',
+    pending: 'Pendente', confirmed: 'Confirmado', cancelled: 'Cancelado', completed: 'Concluído',
   }
-
+  
   const statusColor: Record<string, string> = {
-    pending: 'text-yellow-500',
-    confirmed: 'text-green-500',
-    cancelled: 'text-red-400',
+    pending: '#E67E22', confirmed: '#27AE60', cancelled: '#C0392B', completed: '#8B3A3A',
   }
 
   const filtered = appointments.filter(a => filter === 'all' || a.status === filter)
-
-  const today = appointments.filter(a => {
-    const d = new Date(a.scheduled_at)
-    const now = new Date()
-    return d.toDateString() === now.toDateString() && a.status !== 'cancelled'
-  })
+  const todayCount = appointments.filter(a => 
+    new Date(a.scheduled_at).toDateString() === new Date().toDateString()
+  ).length
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-rose-50 flex items-center justify-center">
-        <p className="text-rose-400">Carregando...</p>
+      <main className="loading-screen">
+        <style>{`
+          .loading-screen { min-height: 100vh; background: #F7EDE8; display: flex; align-items: center; justify-content: center; font-family: 'Jost', sans-serif; color: #C4786A; }
+        `}</style>
+        <p>Carregando painel mestre...</p>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-rose-50 px-4 py-8">
-      <div className="max-w-lg mx-auto">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=Jost:wght@300;400;500&display=swap');
+        
+        .admin-page { min-height: 100vh; background-color: #F7EDE8; font-family: 'Jost', sans-serif; padding-bottom: 5rem; }
+        .header-admin { background: white; padding: 2rem 1.5rem; border-bottom: 1px solid rgba(196,120,106,0.1); margin-bottom: 2rem; }
+        .admin-title { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; color: #6B2D2D; font-weight: 600; }
+        
+        .nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin: 1.5rem 0; }
+        .nav-card { 
+          background: white; border: 1px solid rgba(196,120,106,0.2); padding: 1rem; border-radius: 18px;
+          text-align: center; cursor: pointer; transition: all 0.2s;
+        }
+        .nav-card:hover { border-color: #C4786A; background: #FFF9F6; }
+        .nav-card span { display: block; font-size: 1.2rem; margin-bottom: 0.3rem; }
+        .nav-card p { font-size: 0.75rem; font-weight: 500; color: #8B3A3A; letter-spacing: 0.05em; }
 
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-rose-700">Painel Admin</h1>
-          <p className="text-gray-400 text-sm">Gerencie os agendamentos</p>
-        </div>
+        .container { max-width: 550px; margin: 0 auto; padding: 0 1.2rem; }
+        
+        .stats-row { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .mini-stat { flex: 1; background: rgba(255,255,255,0.5); padding: 1rem; border-radius: 20px; border: 1px solid rgba(196,120,106,0.1); }
+        .mini-stat-val { font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 600; color: #6B2D2D; display: block; }
+        .mini-stat-label { font-size: 0.65rem; color: #C4786A; letter-spacing: 0.1em; }
 
-        <button
-            onClick={() => router.push('/admin/servicos')}
-            className="border border-rose-300 text-rose-600 px-4 py-2 rounded-xl text-sm font-semibold"
-            >
-            Gerenciar Serviços
-        </button>
+        .filter-bar { display: flex; gap: 0.5rem; overflow-x: auto; margin-bottom: 1.5rem; padding-bottom: 0.5rem; }
+        .f-btn { 
+          padding: 0.5rem 1rem; border-radius: 100px; border: 1px solid rgba(196,120,106,0.2);
+          background: white; font-size: 0.75rem; color: #8B5A5A; white-space: nowrap; cursor: pointer;
+        }
+        .f-btn.active { background: #6B2D2D; color: white; border-color: #6B2D2D; }
 
-        {/* Cards resumo */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="text-3xl font-bold text-rose-600">{today.length}</p>
-            <p className="text-sm text-gray-400">Hoje</p>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="text-3xl font-bold text-yellow-500">
-              {appointments.filter(a => a.status === 'pending').length}
-            </p>
-            <p className="text-sm text-gray-400">Pendentes</p>
-          </div>
-        </div>
+        .appt-card { 
+          background: white; border-radius: 24px; padding: 1.2rem; margin-bottom: 1rem;
+          box-shadow: 0 4px 12px rgba(107,45,45,0.03); border: 1px solid rgba(196,120,106,0.1);
+        }
+        .info-name { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 600; color: #6B2D2D; }
+        .info-sub { font-size: 0.75rem; color: #C4786A; }
+        .badge { font-size: 0.6rem; padding: 0.2rem 0.6rem; border-radius: 100px; border: 1px solid currentColor; font-weight: 600; }
+        
+        .service-tag { font-size: 0.8rem; font-weight: 500; color: #8B3A3A; margin: 0.8rem 0 0.4rem; }
+        .time-tag { font-size: 0.75rem; color: #8B5A5A; display: flex; align-items: center; gap: 0.3rem; }
 
-        {/* Filtros */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
-          {(['all', 'pending', 'confirmed', 'cancelled'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
-                filter === f ? 'bg-rose-600 text-white' : 'bg-white text-gray-500'
-              }`}
-            >
-              {f === 'all' ? 'Todos' : statusLabel[f]}
-            </button>
-          ))}
-        </div>
+        .admin-actions { display: flex; gap: 0.5rem; margin-top: 1rem; pt-1rem; border-top: 1px dashed rgba(196,120,106,0.2); padding-top: 1rem; }
+        .btn-adm { flex: 1; padding: 0.6rem; border-radius: 12px; border: none; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn-adm:hover { opacity: 0.8; }
+        .btn-confirm { background: #27AE60; color: white; }
+        .btn-cancel { background: none; border: 1px solid #C0392B; color: #C0392B; }
+      `}</style>
 
-        {/* Lista */}
-        <div className="flex flex-col gap-4">
-          {filtered.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center">
-              <p className="text-gray-400">Nenhum agendamento encontrado.</p>
+      <main className="admin-page">
+        <header className="header-admin">
+          <div className="container">
+            <h1 className="admin-title">Painel Geral</h1>
+            <p className="info-sub">Gestão Administrativa • Thamyres Ribeiro</p>
+            
+            <div className="nav-grid">
+              <div className="nav-card" onClick={() => router.push('/admin/servicos')}>
+                <span>✨</span>
+                <p>SERVIÇOS</p>
+              </div>
+              <div className="nav-card" onClick={() => router.push('/admin/profissionais')}>
+                <span>👥</span>
+                <p>USUÁRIOS</p>
+              </div>
             </div>
-          ) : (
-            filtered.map(appointment => {
-              const date = new Date(appointment.scheduled_at)
+          </div>
+        </header>
+
+        <div className="container">
+          <div className="stats-row">
+            <div className="mini-stat">
+              <span className="mini-stat-val">{todayCount}</span>
+              <span className="mini-stat-label">HOJE</span>
+            </div>
+            <div className="mini-stat">
+              <span className="mini-stat-val">
+                {appointments.filter(a => a.status === 'pending').length}
+              </span>
+              <span className="mini-stat-label">AGUARDANDO</span>
+            </div>
+          </div>
+
+          <div className="filter-bar">
+            {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as const).map(f => (
+              <button 
+                key={f} 
+                onClick={() => setFilter(f)} 
+                className={`f-btn ${filter === f ? 'active' : ''}`}
+              >
+                {f === 'all' ? 'Todos' : statusLabel[f]}
+              </button>
+            ))}
+          </div>
+
+          <div className="list">
+            {filtered.map(app => {
+              const date = new Date(app.scheduled_at)
               return (
-                <div key={appointment.id} className="bg-white rounded-2xl p-5 shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
+                <div key={app.id} className="appt-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <div>
-                      <p className="font-semibold text-gray-700">{appointment.profiles?.full_name}</p>
-                      <p className="text-xs text-gray-400">{appointment.profiles?.phone}</p>
+                      <p className="info-name">{app.profiles?.full_name}</p>
+                      <p className="info-sub">{app.profiles?.phone}</p>
                     </div>
-                    <span className={`text-xs font-medium ${statusColor[appointment.status]}`}>
-                      {statusLabel[appointment.status]}
+                    <span className="badge" style={{ color: statusColor[app.status] }}>
+                      {statusLabel[app.status].toUpperCase()}
                     </span>
                   </div>
 
-                  <p className="text-sm font-medium text-rose-600 mb-1">{appointment.services?.name}</p>
-                  <p className="text-sm text-gray-400">
-                    {date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
-                    {' às '}
-                    {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  <p className="service-tag">{app.services?.name}</p>
+                  <p className="time-tag">
+                    <span>📅</span> {date.toLocaleDateString('pt-BR')} às {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
-                  <p className="text-sm text-gray-400">{appointment.services?.duration_minutes} min · R$ {appointment.services?.price}</p>
 
-                  {appointment.status === 'pending' && (
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => handleStatus(appointment.id, 'confirmed')}
-                        className="flex-1 bg-green-500 text-white py-2 rounded-xl text-sm font-semibold"
-                      >
-                        Confirmar
-                      </button>
-                      <button
-                        onClick={() => handleStatus(appointment.id, 'cancelled')}
-                        className="flex-1 border border-red-300 text-red-400 py-2 rounded-xl text-sm font-semibold"
-                      >
-                        Cancelar
-                      </button>
+                  {app.status === 'pending' && (
+                    <div className="admin-actions">
+                      <button onClick={() => handleStatus(app.id, 'confirmed')} className="btn-adm btn-confirm">Confirmar</button>
+                      <button onClick={() => handleStatus(app.id, 'cancelled')} className="btn-adm btn-cancel">Negar</button>
                     </div>
                   )}
-
-                  {appointment.status === 'confirmed' && (
-                    <div className="flex gap-2 mt-3">
-                        <button
-                        onClick={() => handleComplete(appointment.id)}
-                        className="flex-1 bg-blue-500 text-white py-2 rounded-xl text-sm font-semibold"
-                        >
-                        Concluir agora
-                        </button>
-                        <button
-                        onClick={() => handleStatus(appointment.id, 'cancelled')}
-                        className="flex-1 border border-red-300 text-red-400 py-2 rounded-xl text-sm font-semibold"
-                        >
-                        Cancelar
-                        </button>
-                    </div>
-                    )}
                 </div>
               )
-            })
-          )}
+            })}
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   )
 }
