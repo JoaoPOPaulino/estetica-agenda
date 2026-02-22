@@ -18,6 +18,7 @@ type Professional = {
   name: string
   bio: string
   photo_url: string
+  profiles?: { avatar_url: string }
 }
 
 const ALL_SLOTS = Array.from({ length: 9 * 4 }, (_, i) => {
@@ -147,7 +148,10 @@ export default function AgendarPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
-      const { data: profsData } = await supabase.from('professionals').select('*').eq('active', true)
+      const { data: profsData } = await supabase
+      .from('professionals')
+      .select('*, profiles(avatar_url)')
+      .eq('active', true)
       if (profsData) setProfessionals(profsData)
       const { data: servicesData } = await supabase.from('services').select('*').eq('active', true)
       if (servicesData) setServices(servicesData)
@@ -280,6 +284,7 @@ export default function AgendarPage() {
           background: linear-gradient(135deg, #F2D4CC, #E8B4A8);
           display: flex; align-items: center; justify-content: center;
           font-size: 1.2rem; flex-shrink: 0;
+          overflow: hidden;
         }
         .prof-info { flex: 1; }
         .prof-name { font-weight: 500; color: #4A2020; font-size: 0.95rem; }
@@ -383,7 +388,16 @@ export default function AgendarPage() {
               className={`prof-card ${selectedProfessional === prof.id ? 'selected' : ''}`}
               onClick={() => { setSelectedProfessional(prof.id); setSelectedTime(null); setSelectedHour(null) }}
             >
-              <div className="prof-avatar">🪷</div>
+              <div className="prof-avatar">
+              {prof.profiles?.avatar_url || prof.photo_url
+                ? <img
+                    src={prof.profiles?.avatar_url || prof.photo_url}
+                    alt={prof.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                : '🪷'
+              }
+            </div>
               <div className="prof-info">
                 <p className="prof-name">{prof.name}</p>
                 {prof.bio && <p className="prof-bio">{prof.bio}</p>}

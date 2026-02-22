@@ -11,7 +11,7 @@ type Appointment = {
   status: string
   completed_at?: string
   services: { name: string; duration_minutes: number; price: number }
-  profiles: { full_name: string; phone: string }
+  client: { full_name: string; phone: string }
 }
 
 export default function ProfissionalPage() {
@@ -30,12 +30,18 @@ export default function ProfissionalPage() {
         .from('profiles').select('role, full_name').eq('id', user.id).single()
       if (profile?.role !== 'professional') { router.push('/'); return }
       setProfName(profile.full_name.split(' ')[0])
+
       const { data } = await supabase
         .from('appointments')
-        .select('*, services(name, duration_minutes, price), profiles(full_name, phone)')
+        .select(`
+          *,
+          services(name, duration_minutes, price),
+          client:client_id(full_name, phone)
+        `)
         .eq('professional_id', user.id)
         .order('scheduled_at', { ascending: true })
-      if (data) setAppointments(data)
+
+      if (data) setAppointments(data as any)
       setLoading(false)
     }
     load()
@@ -46,7 +52,7 @@ export default function ProfissionalPage() {
     await supabase.from('appointments').update({ status }).eq('id', id)
     const app = appointments.find(a => a.id === id)
     if (status === 'confirmed' && app) {
-      await createCalendarEvent(app.profiles.full_name, app.services.name, app.scheduled_at, app.services.duration_minutes)
+      await createCalendarEvent(app.client.full_name, app.services.name, app.scheduled_at, app.services.duration_minutes)
     }
     setAppointments(prev => prev.map(a => a.id === id ? { ...a, status } : a))
   }
@@ -110,14 +116,20 @@ export default function ProfissionalPage() {
           backdrop-filter: blur(20px);
           border-bottom: 1px solid rgba(196,120,106,0.15);
           padding: 0.75rem 1.2rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+          display: flex; justify-content: space-between; align-items: center;
           position: sticky; top: 0; z-index: 100;
         }
+        .topbar-left {}
         .topbar-brand { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 600; color: #6B2D2D; }
         .topbar-greeting { font-size: 0.72rem; color: #C4786A; }
-        .topbar-right { display: flex; align-items: center; gap: 0.5rem; }
+        .topbar-right { display: flex; align-items: center; gap: 0.4rem; }
+        .topbar-link {
+          padding: 0.4rem 0.8rem; border-radius: 100px; font-size: 0.72rem;
+          font-weight: 500; color: #8B5A5A; text-decoration: none;
+          border: 1.5px solid transparent; transition: all 0.2s;
+          font-family: 'Jost', sans-serif;
+        }
+        .topbar-link:hover { color: #6B2D2D; background: rgba(139,58,58,0.06); }
         .btn-logout {
           padding: 0.4rem 0.9rem; border-radius: 100px; font-size: 0.72rem;
           font-weight: 500; color: #C4786A; border: 1.5px solid rgba(196,120,106,0.3);
@@ -197,11 +209,14 @@ export default function ProfissionalPage() {
 
       <main className="page">
         <div className="topbar">
-          <div>
+          <div className="topbar-left">
             <p className="topbar-brand">Thamyres Ribeiro</p>
             <p className="topbar-greeting">Olá, {profName} 🌸</p>
           </div>
-          <button onClick={handleLogout} className="btn-logout">Sair</button>
+          <div className="topbar-right">
+            <a href="/profissional/perfil" className="topbar-link">Perfil</a>
+            <button onClick={handleLogout} className="btn-logout">Sair</button>
+          </div>
         </div>
 
         <div className="content">
@@ -242,8 +257,8 @@ export default function ProfissionalPage() {
                   <div key={appointment.id} className="appt-card">
                     <div className="appt-header">
                       <div>
-                        <p className="client-name">{appointment.profiles?.full_name}</p>
-                        <p className="client-phone">{appointment.profiles?.phone}</p>
+                        <p className="client-name">{appointment.client?.full_name}</p>
+                        <p className="client-phone">{appointment.client?.phone}</p>
                       </div>
                       <span className="status-badge" style={{ color: statusColor[appointment.status] }}>
                         {statusLabel[appointment.status]}

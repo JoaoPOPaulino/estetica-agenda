@@ -105,6 +105,9 @@ export default function Navbar() {
           <a href="/meus-agendamentos" className={`nav-link ${pathname === '/meus-agendamentos' ? 'active' : ''}`}>
             Agendamentos
           </a>
+          <a href="/perfil" className={`nav-link ${pathname === '/perfil' ? 'active' : ''}`}>
+            Perfil
+          </a>
           <button onClick={handleLogout} className="nav-link logout">
             Sair
           </button>
