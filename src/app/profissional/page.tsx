@@ -10,6 +10,7 @@ type Appointment = {
   scheduled_at: string
   status: string
   completed_at?: string
+  notes?: string
   services: { name: string; duration_minutes: number; price: number }
   client: { full_name: string; phone: string }
 }
@@ -112,22 +113,19 @@ export default function ProfissionalPage() {
           font-family: 'Jost', sans-serif;
         }
         .topbar {
-          background: rgba(247,237,232,0.92);
-          backdrop-filter: blur(20px);
+          background: rgba(247,237,232,0.92); backdrop-filter: blur(20px);
           border-bottom: 1px solid rgba(196,120,106,0.15);
           padding: 0.75rem 1.2rem;
           display: flex; justify-content: space-between; align-items: center;
           position: sticky; top: 0; z-index: 100;
         }
-        .topbar-left {}
         .topbar-brand { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 600; color: #6B2D2D; }
         .topbar-greeting { font-size: 0.72rem; color: #C4786A; }
         .topbar-right { display: flex; align-items: center; gap: 0.4rem; }
         .topbar-link {
           padding: 0.4rem 0.8rem; border-radius: 100px; font-size: 0.72rem;
           font-weight: 500; color: #8B5A5A; text-decoration: none;
-          border: 1.5px solid transparent; transition: all 0.2s;
-          font-family: 'Jost', sans-serif;
+          border: 1.5px solid transparent; transition: all 0.2s; font-family: 'Jost', sans-serif;
         }
         .topbar-link:hover { color: #6B2D2D; background: rgba(139,58,58,0.06); }
         .btn-logout {
@@ -137,9 +135,25 @@ export default function ProfissionalPage() {
         }
         .btn-logout:hover { color: #8B3A3A; border-color: #8B3A3A; }
         .content { padding: 2rem 1.2rem; }
+        .page-header {
+          display: flex; justify-content: space-between; align-items: flex-end;
+          max-width: 500px; margin: 0 auto 1.5rem;
+        }
         .page-title { font-family: 'Cormorant Garamond', serif; font-size: 2rem; font-weight: 600; color: #6B2D2D; margin-bottom: 0.2rem; }
-        .page-subtitle { font-size: 0.78rem; letter-spacing: 0.1em; color: #C4786A; margin-bottom: 1.5rem; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.5rem; max-width: 500px; margin-left: auto; margin-right: auto; }
+        .page-subtitle { font-size: 0.78rem; letter-spacing: 0.1em; color: #C4786A; }
+        .btn-new-appt {
+          padding: 0.65rem 1.2rem; border-radius: 100px; border: none; flex-shrink: 0;
+          background: linear-gradient(135deg, #8B3A3A, #6B2D2D); color: #F7EDE8;
+          font-family: 'Jost', sans-serif; font-size: 0.75rem; font-weight: 500;
+          letter-spacing: 0.1em; text-decoration: none; cursor: pointer;
+          box-shadow: 0 3px 12px rgba(107,45,45,0.25); transition: all 0.2s; white-space: nowrap;
+          display: inline-flex; align-items: center;
+        }
+        .btn-new-appt:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(107,45,45,0.35); }
+        .stats-grid {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;
+          margin-bottom: 1.5rem; max-width: 500px; margin-left: auto; margin-right: auto;
+        }
         .stat-card {
           background: rgba(255,255,255,0.65); backdrop-filter: blur(10px);
           border: 1px solid rgba(196,120,106,0.15); border-radius: 20px; padding: 1.2rem 1.5rem;
@@ -182,6 +196,11 @@ export default function ProfissionalPage() {
         .appt-service { font-size: 0.85rem; font-weight: 500; color: #8B3A3A; margin-bottom: 0.5rem; }
         .appt-details { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
         .appt-detail { font-size: 0.8rem; color: #8B5A5A; display: flex; align-items: center; gap: 0.4rem; }
+        .appt-notes {
+          font-size: 0.78rem; color: #8B5A5A; font-style: italic;
+          background: rgba(196,120,106,0.06); border-radius: 8px; padding: 0.5rem 0.7rem;
+          margin-bottom: 0.8rem; border-left: 2px solid rgba(196,120,106,0.3);
+        }
         .divider { height: 1px; background: linear-gradient(90deg, rgba(196,120,106,0.15), transparent); margin-bottom: 1rem; }
         .action-btns { display: flex; gap: 0.6rem; }
         .btn-confirm-appt {
@@ -209,19 +228,27 @@ export default function ProfissionalPage() {
 
       <main className="page">
         <div className="topbar">
-          <div className="topbar-left">
+          <div>
             <p className="topbar-brand">Thamyres Ribeiro</p>
             <p className="topbar-greeting">Olá, {profName} 🌸</p>
           </div>
           <div className="topbar-right">
+            <a href="/profissional/servicos" className="topbar-link">Serviços</a>
             <a href="/profissional/perfil" className="topbar-link">Perfil</a>
             <button onClick={handleLogout} className="btn-logout">Sair</button>
           </div>
         </div>
 
         <div className="content">
-          <h1 className="page-title">Minha Agenda</h1>
-          <p className="page-subtitle">Gerencie seus atendimentos</p>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Minha Agenda</h1>
+              <p className="page-subtitle">Gerencie seus atendimentos</p>
+            </div>
+            <a href="/profissional/novo-agendamento" className="btn-new-appt">
+              + Agendar
+            </a>
+          </div>
 
           <div className="stats-grid">
             <div className="stat-card">
@@ -250,65 +277,69 @@ export default function ProfissionalPage() {
                 <div className="empty-icon">🪷</div>
                 <p className="empty-text">Nenhum agendamento encontrado.</p>
               </div>
-            ) : (
-              filtered.map(appointment => {
-                const date = new Date(appointment.scheduled_at)
-                return (
-                  <div key={appointment.id} className="appt-card">
-                    <div className="appt-header">
-                      <div>
-                        <p className="client-name">{appointment.client?.full_name}</p>
-                        <p className="client-phone">{appointment.client?.phone}</p>
-                      </div>
-                      <span className="status-badge" style={{ color: statusColor[appointment.status] }}>
-                        {statusLabel[appointment.status]}
-                      </span>
+            ) : filtered.map(appointment => {
+              const date = new Date(appointment.scheduled_at)
+              return (
+                <div key={appointment.id} className="appt-card">
+                  <div className="appt-header">
+                    <div>
+                      <p className="client-name">{appointment.client?.full_name ?? 'Cliente'}</p>
+                      {appointment.client?.phone && (
+                        <p className="client-phone">{appointment.client.phone}</p>
+                      )}
                     </div>
-
-                    <p className="appt-service">{appointment.services?.name}</p>
-
-                    <div className="appt-details">
-                      <p className="appt-detail">
-                        <span>📅</span>
-                        {date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
-                      </p>
-                      <p className="appt-detail">
-                        <span>🕐</span>
-                        {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      <p className="appt-detail">
-                        <span>⏱</span>
-                        {appointment.services?.duration_minutes >= 60
-                          ? `${appointment.services.duration_minutes / 60}h`
-                          : `${appointment.services?.duration_minutes} min`}
-                        {' · '}R$ {appointment.services?.price}
-                      </p>
-                    </div>
-
-                    {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
-                      <>
-                        <div className="divider" />
-                        <div className="action-btns">
-                          {appointment.status === 'pending' && (
-                            <button onClick={() => handleStatus(appointment.id, 'confirmed')} className="btn-confirm-appt">
-                              Confirmar
-                            </button>
-                          )}
-                          {appointment.status === 'confirmed' && (
-                            <button onClick={() => handleComplete(appointment.id)} className="btn-complete">
-                              Concluir
-                            </button>
-                          )}
-                          <button onClick={() => handleStatus(appointment.id, 'cancelled')} className="btn-cancel-appt">
-                            Cancelar
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <span className="status-badge" style={{ color: statusColor[appointment.status] }}>
+                      {statusLabel[appointment.status]}
+                    </span>
                   </div>
-                )
-              })
-            )}
+
+                  <p className="appt-service">{appointment.services?.name}</p>
+
+                  <div className="appt-details">
+                    <p className="appt-detail">
+                      <span>📅</span>
+                      {date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+                    </p>
+                    <p className="appt-detail">
+                      <span>🕐</span>
+                      {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="appt-detail">
+                      <span>⏱</span>
+                      {appointment.services?.duration_minutes >= 60
+                        ? `${appointment.services.duration_minutes / 60}h`
+                        : `${appointment.services?.duration_minutes} min`}
+                      {' · '}R$ {appointment.services?.price}
+                    </p>
+                  </div>
+
+                  {appointment.notes && (
+                    <p className="appt-notes">📝 {appointment.notes}</p>
+                  )}
+
+                  {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
+                    <>
+                      <div className="divider" />
+                      <div className="action-btns">
+                        {appointment.status === 'pending' && (
+                          <button onClick={() => handleStatus(appointment.id, 'confirmed')} className="btn-confirm-appt">
+                            Confirmar
+                          </button>
+                        )}
+                        {appointment.status === 'confirmed' && (
+                          <button onClick={() => handleComplete(appointment.id)} className="btn-complete">
+                            Concluir
+                          </button>
+                        )}
+                        <button onClick={() => handleStatus(appointment.id, 'cancelled')} className="btn-cancel-appt">
+                          Cancelar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </main>

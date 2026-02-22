@@ -11,6 +11,8 @@ type Service = {
   description: string
   duration_minutes: number
   price: number
+  service_type: string
+  blocks_equipment: boolean
 }
 
 type Professional = {
@@ -36,29 +38,53 @@ function getSlotMinutes(slot: string) {
   return h * 60 + m
 }
 
-function getBlockedSlots(appointments: any[], services: Service[], date: string, professionalId: string) {
+function getBlockedSlots(
+  appointments: any[],
+  services: Service[],
+  date: string,
+  professionalId: string,
+  selectedServiceType: string,
+  selectedBlocks: boolean
+) {
   const blocked = new Set<string>()
+
   appointments.forEach(app => {
     if (app.status === 'cancelled' || app.status === 'completed') return
-    if (app.professional_id !== professionalId) return
+
     const appDate = new Date(app.scheduled_at)
     if (appDate.toISOString().split('T')[0] !== date) return
-    const service = services.find(s => s.id === app.service_id)
-    if (!service) return
+
+    const appService = services.find(s => s.id === app.service_id)
+    if (!appService) return
+
+    // Bloqueia slots da mesma profissional
+    const sameProf = app.professional_id === professionalId
+
+    // Bloqueia slots do mesmo tipo de equipamento (qualquer profissional)
+    const sameEquipment =
+      selectedBlocks &&
+      appService.blocks_equipment &&
+      appService.service_type === selectedServiceType
+
+    if (!sameProf && !sameEquipment) return
+
     const endTime = app.completed_at
       ? new Date(app.completed_at)
-      : new Date(appDate.getTime() + service.duration_minutes * 60000)
+      : new Date(appDate.getTime() + appService.duration_minutes * 60000)
+
     const startMin = appDate.getHours() * 60 + appDate.getMinutes()
     const endMin = endTime.getHours() * 60 + endTime.getMinutes()
+
     ALL_SLOTS.forEach(slot => {
       const slotMin = getSlotMinutes(slot)
       if (slotMin >= startMin && slotMin < endMin) blocked.add(slot)
     })
   })
+
   return blocked
 }
 
-function CalendarPicker({ selected, onSelect }: { selected: string, onSelect: (d: string) => void }) {
+function CalendarPicker({ selected, onSelect }: { selected: string; onSelect: (d: string) => void }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -85,7 +111,7 @@ function CalendarPicker({ selected, onSelect }: { selected: string, onSelect: (d
     const date = new Date(viewYear, viewMonth, day)
     date.setHours(0, 0, 0, 0)
     if (date < today) return
-    const str = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    const str = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     onSelect(str)
   }
 
@@ -107,10 +133,10 @@ function CalendarPicker({ selected, onSelect }: { selected: string, onSelect: (d
         {cells.map((day, i) => {
           if (!day) return <div key={`e-${i}`} className="cal-day empty" />
           const date = new Date(viewYear, viewMonth, day)
-          date.setHours(0,0,0,0)
+          date.setHours(0, 0, 0, 0)
           const isPast = date < today
           const isToday = date.getTime() === today.getTime()
-          const str = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+          const str = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
           const isSelected = selected === str
           return (
             <button
@@ -138,32 +164,62 @@ export default function AgendarPage() {
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [selectedHour, setSelectedHour] = useState<string | null>(null)
+  const [loadingServices, setLoadingServices] = useState(false)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [dateError, setDateError] = useState('')
 
+  // Carrega profissionais e agendamentos na montagem
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       const { data: profsData } = await supabase
-      .from('professionals')
-      .select('*, profiles(avatar_url)')
-      .eq('active', true)
+        .from('professionals')
+        .select('*, profiles(avatar_url)')
+        .eq('active', true)
       if (profsData) setProfessionals(profsData)
-      const { data: servicesData } = await supabase.from('services').select('*').eq('active', true)
-      if (servicesData) setServices(servicesData)
       const { data: appsData } = await supabase.from('appointments').select('*')
       if (appsData) setAllAppointments(appsData)
     }
     load()
   }, [])
 
+  // Carrega serviços quando profissional é selecionada
+  useEffect(() => {
+    if (!selectedProfessional) {
+      setServices([])
+      setSelectedService(null)
+      return
+    }
+    async function loadServices() {
+      setLoadingServices(true)
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('services')
+        .select('*')
+        .eq('active', true)
+        .eq('professional_id', selectedProfessional)
+        .order('name')
+      if (data) setServices(data)
+      setLoadingServices(false)
+    }
+    loadServices()
+  }, [selectedProfessional])
+
   const selectedServiceData = services.find(s => s.id === selectedService)
-  const blockedSlots = selectedDate && selectedProfessional
-    ? getBlockedSlots(allAppointments, services, selectedDate, selectedProfessional)
+
+  const blockedSlots = selectedDate && selectedProfessional && selectedServiceData
+    ? getBlockedSlots(
+        allAppointments,
+        services,
+        selectedDate,
+        selectedProfessional,
+        selectedServiceData.service_type,
+        selectedServiceData.blocks_equipment
+      )
     : new Set<string>()
 
   function getAvailableSlots() {
@@ -210,11 +266,12 @@ export default function AgendarPage() {
           .desc { font-size: 0.85rem; color: #C4786A; margin-bottom: 2rem; line-height: 1.6; }
           .btn { display: block; width: 100%; padding: 1rem; background: linear-gradient(135deg, #8B3A3A 0%, #6B2D2D 100%); color: #F7EDE8; border: none; border-radius: 100px; font-family: 'Jost', sans-serif; font-size: 0.85rem; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; box-shadow: 0 4px 20px rgba(107,45,45,0.3); text-decoration: none; }
         `}</style>
-        <Navbar />
         <main className="page">
-          <div className="header">
-            <h1 className="page-title">Agendar</h1>
-            <p className="page-subtitle">Escolha a profissional e horário</p>
+          <div className="card">
+            <div className="success-icon">🌸</div>
+            <h1 className="title">Agendado!</h1>
+            <p className="desc">Seu agendamento foi realizado com sucesso. Aguarde a confirmação da profissional.</p>
+            <a href="/meus-agendamentos" className="btn">Ver Meus Agendamentos</a>
           </div>
         </main>
       </>
@@ -238,44 +295,22 @@ export default function AgendarPage() {
           font-family: 'Jost', sans-serif;
         }
         .header { max-width: 500px; margin: 0 auto 2.5rem; }
-        .back-link:hover { opacity: 1; }
-        .page-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 2.2rem;
-          font-weight: 600;
-          color: #6B2D2D;
-          margin-bottom: 0.3rem;
-        }
+        .page-title { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; font-weight: 600; color: #6B2D2D; margin-bottom: 0.3rem; }
         .page-subtitle { font-size: 0.78rem; letter-spacing: 0.1em; color: #C4786A; }
         .section { max-width: 500px; margin: 0 auto 2rem; }
         .section-title {
-          font-family: 'Cormorant Garamond', serif;
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: #6B2D2D;
-          margin-bottom: 1rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
+          font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 600;
+          color: #6B2D2D; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;
         }
         .section-title::after {
-          content: '';
-          flex: 1;
-          height: 1px;
+          content: ''; flex: 1; height: 1px;
           background: linear-gradient(90deg, rgba(196,120,106,0.3), transparent);
         }
         .prof-card {
-          background: rgba(255,255,255,0.65);
-          backdrop-filter: blur(10px);
-          border: 1.5px solid rgba(196,120,106,0.15);
-          border-radius: 20px;
-          padding: 1.2rem 1.5rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          margin-bottom: 0.75rem;
-          display: flex;
-          align-items: center;
-          gap: 1rem;
+          background: rgba(255,255,255,0.65); backdrop-filter: blur(10px);
+          border: 1.5px solid rgba(196,120,106,0.15); border-radius: 20px;
+          padding: 1.2rem 1.5rem; cursor: pointer; transition: all 0.2s;
+          margin-bottom: 0.75rem; display: flex; align-items: center; gap: 1rem;
         }
         .prof-card:hover { border-color: rgba(196,120,106,0.4); transform: translateY(-1px); }
         .prof-card.selected { border-color: #8B3A3A; background: rgba(139,58,58,0.05); }
@@ -283,54 +318,49 @@ export default function AgendarPage() {
           width: 44px; height: 44px; border-radius: 50%;
           background: linear-gradient(135deg, #F2D4CC, #E8B4A8);
           display: flex; align-items: center; justify-content: center;
-          font-size: 1.2rem; flex-shrink: 0;
-          overflow: hidden;
+          font-size: 1.2rem; flex-shrink: 0; overflow: hidden;
         }
+        .prof-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
         .prof-info { flex: 1; }
         .prof-name { font-weight: 500; color: #4A2020; font-size: 0.95rem; }
         .prof-bio { font-size: 0.78rem; color: #C4786A; margin-top: 0.15rem; }
         .check { color: #8B3A3A; font-size: 1.1rem; opacity: 0; transition: opacity 0.2s; }
         .prof-card.selected .check { opacity: 1; }
         .service-card {
-          background: rgba(255,255,255,0.65);
-          backdrop-filter: blur(10px);
-          border: 1.5px solid rgba(196,120,106,0.15);
-          border-radius: 20px;
-          padding: 1.2rem 1.5rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          margin-bottom: 0.75rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+          background: rgba(255,255,255,0.65); backdrop-filter: blur(10px);
+          border: 1.5px solid rgba(196,120,106,0.15); border-radius: 20px;
+          padding: 1.2rem 1.5rem; cursor: pointer; transition: all 0.2s;
+          margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;
         }
         .service-card:hover { border-color: rgba(196,120,106,0.4); transform: translateY(-1px); }
         .service-card.selected { border-color: #8B3A3A; background: rgba(139,58,58,0.05); }
         .service-name { font-weight: 500; color: #4A2020; font-size: 0.95rem; }
         .service-meta { font-size: 0.78rem; color: #C4786A; margin-top: 0.2rem; }
         .service-price { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-weight: 600; color: #8B3A3A; }
+        .service-type-badge {
+          font-size: 0.65rem; font-weight: 500; letter-spacing: 0.05em;
+          padding: 0.15rem 0.5rem; border-radius: 100px;
+          background: rgba(196,120,106,0.1); border: 1px solid rgba(196,120,106,0.2);
+          color: #8B3A3A; display: inline-block; margin-top: 0.3rem;
+        }
+        .loading-services { font-size: 0.8rem; color: #C4786A; text-align: center; padding: 1.5rem; letter-spacing: 0.08em; }
+        .empty-services { font-size: 0.8rem; color: #C4A090; text-align: center; padding: 1.5rem; font-style: italic; }
         .hint { font-size: 0.72rem; color: #C4786A; margin-bottom: 1rem; font-style: italic; }
         .hours-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
         .minutes-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1.5rem; }
         .slot-btn {
-          padding: 0.75rem 0.5rem;
-          border-radius: 12px;
-          font-family: 'Jost', sans-serif;
-          font-size: 0.82rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
+          padding: 0.75rem 0.5rem; border-radius: 12px;
+          font-family: 'Jost', sans-serif; font-size: 0.82rem; font-weight: 500;
+          cursor: pointer; transition: all 0.2s;
           border: 1.5px solid rgba(196,120,106,0.2);
-          background: rgba(255,255,255,0.65);
-          color: #4A2020;
+          background: rgba(255,255,255,0.65); color: #4A2020;
         }
         .slot-btn:hover:not(:disabled) { border-color: #C4786A; transform: translateY(-1px); }
         .slot-btn.selected { background: linear-gradient(135deg, #8B3A3A, #6B2D2D); color: #F7EDE8; border-color: transparent; }
         .slot-btn:disabled { background: rgba(0,0,0,0.04); color: #CCC; cursor: not-allowed; border-color: transparent; }
         .btn-confirm {
           width: 100%; max-width: 500px; display: block; margin: 0 auto;
-          padding: 1.1rem;
-          background: linear-gradient(135deg, #8B3A3A 0%, #6B2D2D 100%);
+          padding: 1.1rem; background: linear-gradient(135deg, #8B3A3A 0%, #6B2D2D 100%);
           color: #F7EDE8; border: none; border-radius: 100px;
           font-family: 'Jost', sans-serif; font-size: 0.85rem; font-weight: 500;
           letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer;
@@ -341,12 +371,9 @@ export default function AgendarPage() {
         .login-hint { text-align: center; font-size: 0.78rem; color: #C4786A; margin-top: 1rem; }
         .login-hint a { color: #8B3A3A; font-weight: 500; text-decoration: none; }
         .calendar-wrapper {
-          background: rgba(255,255,255,0.65);
-          backdrop-filter: blur(10px);
-          border: 1.5px solid rgba(196,120,106,0.2);
-          border-radius: 20px;
-          padding: 1.2rem;
-          overflow: hidden;
+          background: rgba(255,255,255,0.65); backdrop-filter: blur(10px);
+          border: 1.5px solid rgba(196,120,106,0.2); border-radius: 20px;
+          padding: 1.2rem; overflow: hidden;
         }
         .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; }
         .cal-month { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 600; color: #6B2D2D; letter-spacing: 0.05em; }
@@ -373,61 +400,80 @@ export default function AgendarPage() {
       `}</style>
 
       <Navbar />
-        <main className="page">
-          <div className="header">
-            <h1 className="page-title">Agendar</h1>
-            <p className="page-subtitle">Escolha a profissional e horário</p>
-          </div>
+      <main className="page">
+        <div className="header">
+          <h1 className="page-title">Agendar</h1>
+          <p className="page-subtitle">Escolha a profissional e horário</p>
+        </div>
 
         {/* Profissionais */}
         <div className="section">
           <h2 className="section-title">Profissional</h2>
-          {professionals.map(prof => (
-            <div
-              key={prof.id}
-              className={`prof-card ${selectedProfessional === prof.id ? 'selected' : ''}`}
-              onClick={() => { setSelectedProfessional(prof.id); setSelectedTime(null); setSelectedHour(null) }}
-            >
-              <div className="prof-avatar">
-              {prof.profiles?.avatar_url || prof.photo_url
-                ? <img
-                    src={prof.profiles?.avatar_url || prof.photo_url}
-                    alt={prof.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-                  />
-                : '🪷'
-              }
-            </div>
-              <div className="prof-info">
-                <p className="prof-name">{prof.name}</p>
-                {prof.bio && <p className="prof-bio">{prof.bio}</p>}
+          {professionals.map(prof => {
+            const foto = prof.profiles?.avatar_url || prof.photo_url
+            return (
+              <div
+                key={prof.id}
+                className={`prof-card ${selectedProfessional === prof.id ? 'selected' : ''}`}
+                onClick={() => {
+                  setSelectedProfessional(prof.id)
+                  setSelectedService(null)
+                  setSelectedTime(null)
+                  setSelectedHour(null)
+                  setSelectedDate('')
+                  setServices([])
+                }}
+              >
+                <div className="prof-avatar">
+                  {foto
+                    ? <img src={foto} alt={prof.name} />
+                    : '🪷'
+                  }
+                </div>
+                <div className="prof-info">
+                  <p className="prof-name">{prof.name}</p>
+                  {prof.bio && <p className="prof-bio">{prof.bio}</p>}
+                </div>
+                <span className="check">✓</span>
               </div>
-              <span className="check">✓</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        {/* Serviços */}
+        {/* Serviços — só aparecem após selecionar profissional */}
         {selectedProfessional && (
           <div className="section">
             <h2 className="section-title">Serviço</h2>
-            {services.map(service => (
-              <div
-                key={service.id}
-                className={`service-card ${selectedService === service.id ? 'selected' : ''}`}
-                onClick={() => { setSelectedService(service.id); setSelectedTime(null); setSelectedHour(null) }}
-              >
-                <div>
-                  <p className="service-name">{service.name}</p>
-                  <p className="service-meta">
-                    {service.duration_minutes >= 60
-                      ? `${service.duration_minutes / 60}h`
-                      : `${service.duration_minutes} min`}
-                  </p>
+            {loadingServices ? (
+              <p className="loading-services">Carregando serviços...</p>
+            ) : services.length === 0 ? (
+              <p className="empty-services">Esta profissional não possui serviços cadastrados.</p>
+            ) : (
+              services.map(service => (
+                <div
+                  key={service.id}
+                  className={`service-card ${selectedService === service.id ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedService(service.id)
+                    setSelectedTime(null)
+                    setSelectedHour(null)
+                  }}
+                >
+                  <div>
+                    <p className="service-name">{service.name}</p>
+                    <p className="service-meta">
+                      {service.duration_minutes >= 60
+                        ? `${service.duration_minutes / 60}h`
+                        : `${service.duration_minutes} min`}
+                    </p>
+                    {service.service_type && (
+                      <span className="service-type-badge">{service.service_type}</span>
+                    )}
+                  </div>
+                  <p className="service-price">R$ {service.price}</p>
                 </div>
-                <p className="service-price">R$ {service.price}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
@@ -454,6 +500,9 @@ export default function AgendarPage() {
             <h2 className="section-title">Horário</h2>
             {selectedServiceData && selectedServiceData.duration_minutes >= 60 && (
               <p className="hint">⏱ Este serviço dura {selectedServiceData.duration_minutes / 60}h — horários subsequentes serão bloqueados.</p>
+            )}
+            {selectedServiceData?.blocks_equipment && (
+              <p className="hint">⚡ Este serviço usa equipamento exclusivo — sem conflito de horários com outras profissionais.</p>
             )}
 
             <p style={{ fontSize: '0.72rem', color: '#C4A090', marginBottom: '0.6rem', letterSpacing: '0.05em' }}>HORA</p>
