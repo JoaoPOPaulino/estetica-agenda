@@ -17,6 +17,7 @@ type Client = {
   id: string
   full_name: string
   phone: string
+  isWalkIn?: boolean
 }
 
 const ALL_SLOTS = Array.from({ length: 9 * 4 }, (_, i) => {
@@ -176,29 +177,42 @@ export default function NovoAgendamentoPage() {
   }
 
   async function handleCreateClient() {
-    if (!newClientName.trim()) return
-    setCreatingClient(true)
-    setMsg(null)
-    const supabase = createClient()
-    const fakeId = crypto.randomUUID()
-    const { error } = await supabase.from('profiles').insert({
-      id: fakeId,
+  if (!newClientName.trim()) return
+
+  setCreatingClient(true)
+  setMsg(null)
+
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('walk_in_clients')
+    .insert({
       full_name: newClientName.trim(),
       phone: newClientPhone.replace(/\D/g, ''),
-      role: 'client',
+      created_by: profId,
     })
-    if (error) {
-      setMsg({ type: 'error', text: 'Erro ao criar cliente.' })
-      setCreatingClient(false)
-      return
-    }
-    const newClient: Client = { id: fakeId, full_name: newClientName.trim(), phone: newClientPhone }
-    setSelectedClient(newClient)
-    setShowNewClient(false)
-    setNewClientName('')
-    setNewClientPhone('')
+    .select('id, full_name, phone')
+    .single()
+
+  if (error || !data) {
+    setMsg({ type: 'error', text: 'Erro ao criar cliente.' })
     setCreatingClient(false)
+    return
   }
+
+  const newClient: Client = {
+    id: data.id,
+    full_name: data.full_name,
+    phone: data.phone,
+    isWalkIn: true,
+  }
+
+  setSelectedClient(newClient)
+  setShowNewClient(false)
+  setNewClientName('')
+  setNewClientPhone('')
+  setCreatingClient(false)
+}
 
   async function handleSave() {
     if (!selectedClient || !selectedService || !selectedDate || !selectedTime) {
@@ -209,14 +223,24 @@ export default function NovoAgendamentoPage() {
     setMsg(null)
     const supabase = createClient()
     const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00`)
-    const { error } = await supabase.from('appointments').insert({
-      client_id: selectedClient.id,
-      professional_id: profId,
-      service_id: selectedService,
-      scheduled_at: scheduledAt.toISOString(),
-      status: 'confirmed',
-      notes: notes.trim() || null,
-    })
+   const appointmentData = selectedClient.isWalkIn
+    ? {
+        walk_in_client_id: selectedClient.id,
+        client_id: null,
+      }
+    : {
+        client_id: selectedClient.id,
+        walk_in_client_id: null,
+      }
+
+  const { error } = await supabase.from('appointments').insert({
+    ...appointmentData,
+    professional_id: profId,
+    service_id: selectedService,
+    scheduled_at: scheduledAt.toISOString(),
+    status: 'confirmed',
+    notes: notes.trim() || null,
+  })
     setSaving(false)
     if (error) setMsg({ type: 'error', text: 'Erro ao agendar.' })
     else setSuccess(true)
