@@ -146,7 +146,9 @@ export default function Home() {
 
       <main className="page">
         <div className="card">
-          <div className="logo-container">🪷</div>
+          <div className="logo-container">
+            <img src="/logo.png" alt="Thamyres Ribeiro" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+          </div>
           <h1 className="brand-name">Thamyres Ribeiro</h1>
           <p className="brand-subtitle">Clínica Estética e Saúde</p>
           <div className="divider" />

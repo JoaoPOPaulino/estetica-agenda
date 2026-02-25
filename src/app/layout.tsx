@@ -2,8 +2,11 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Estetica - Agendamento',
+  title: 'Thamyres Ribeiro',
   description: 'Agende seu horario',
+  icons: {
+    icon: '/favicon.png',
+  }
 }
 
 export default function RootLayout({
