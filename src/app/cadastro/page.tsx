@@ -27,6 +27,7 @@ export default function CadastroPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   function validate() {
     const newErrors: Record<string, string> = {}

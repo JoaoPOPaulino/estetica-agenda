@@ -10,22 +10,31 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('') // Para mensagens de sucesso
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
-
-  const supabase = createClient()
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleLogin() {
+    const supabase = createClient()
     setLoading(true)
     setError('')
     setMessage('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError('Email ou senha inválidos.'); setLoading(false); return }
-    router.push('/meus-agendamentos')
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', user?.id).single()
+    if (profile?.role === 'professional') {
+      router.push('/profissional')
+    } else if (profile?.role === 'super_admin') {
+      router.push('/admin')
+    } else {
+      router.push('/meus-agendamentos')
+    }
   }
 
-  // Função para recuperação de senha
   async function handleForgotPassword() {
+    const supabase = createClient()
     if (!email) {
       setError('Por favor, digite seu email primeiro.')
       return
@@ -104,6 +113,9 @@ export default function LoginPage() {
           gap: 1rem;
           margin-bottom: 1.5rem;
         }
+        .password-wrapper {
+          position: relative;
+        }
         input {
           width: 100%;
           padding: 0.9rem 1.2rem;
@@ -121,6 +133,26 @@ export default function LoginPage() {
           background: rgba(255,255,255,0.8);
         }
         input::placeholder { color: #C4A090; }
+        .password-wrapper input {
+          padding-right: 3rem;
+        }
+        .btn-show-password {
+          position: absolute;
+          right: 1rem;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-size: 1rem;
+          color: #C4786A;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+        }
+        .btn-show-password:hover { color: #8B3A3A; }
         .error-msg {
           font-size: 0.78rem;
           color: #C0392B;
@@ -197,13 +229,25 @@ export default function LoginPage() {
               placeholder="Seu email"
               value={email}
               onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleLogin()}
             />
-            <input
-              type="password"
-              placeholder="Sua senha"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
+            <div className="password-wrapper">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Sua senha"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleLogin()}
+              />
+              <button
+                type="button"
+                className="btn-show-password"
+                onClick={() => setShowPassword(v => !v)}
+                tabIndex={-1}
+              >
+                {showPassword ? '🙈' : '👁'}
+              </button>
+            </div>
             <Link href="/recuperar-senha" className="forgot-link">
               Esqueci minha senha
             </Link>

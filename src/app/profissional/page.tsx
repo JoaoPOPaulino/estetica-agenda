@@ -13,6 +13,7 @@ type Appointment = {
   notes?: string
   services: { name: string; duration_minutes: number; price: number }
   client: { full_name: string; phone: string }
+  walk_in_client: { full_name: string; phone: string } | null
 }
 
 export default function ProfissionalPage() {
@@ -37,7 +38,8 @@ export default function ProfissionalPage() {
         .select(`
           *,
           services(name, duration_minutes, price),
-          client:client_id(full_name, phone)
+          client:client_id(full_name, phone),
+          walk_in_client:walk_in_client_id(full_name, phone)
         `)
         .eq('professional_id', user.id)
         .order('scheduled_at', { ascending: true })
@@ -283,9 +285,12 @@ export default function ProfissionalPage() {
                 <div key={appointment.id} className="appt-card">
                   <div className="appt-header">
                     <div>
-                      <p className="client-name">{appointment.client?.full_name ?? 'Cliente'}</p>
+                      <p className="client-name">{appointment.client?.full_name ?? appointment.walk_in_client?.full_name ?? 'Cliente'}</p>
                       {appointment.client?.phone && (
                         <p className="client-phone">{appointment.client.phone}</p>
+                      )}
+                      {appointment.walk_in_client?.phone && !appointment.client?.phone && (
+                        <p className="client-phone">{appointment.walk_in_client.phone}</p>
                       )}
                     </div>
                     <span className="status-badge" style={{ color: statusColor[appointment.status] }}>

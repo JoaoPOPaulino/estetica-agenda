@@ -10,17 +10,35 @@ export default function Navbar() {
   const [userName, setUserName] = useState('')
 
   useEffect(() => {
-    async function load() {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    const supabase = createClient()
+
+    // Busca o perfil quando a sessão estiver disponível
+    async function loadProfile() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
       const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', user.id).single()
+        .from('profiles').select('full_name').eq('id', session.user.id).single()
       if (profile?.full_name) {
         setUserName(profile.full_name.split(' ')[0])
       }
     }
-    load()
+
+    loadProfile()
+
+    // Também escuta mudanças de sessão (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        supabase
+          .from('profiles').select('full_name').eq('id', session.user.id).single()
+          .then(({ data }) => {
+            if (data?.full_name) setUserName(data.full_name.split(' ')[0])
+          })
+      } else {
+        setUserName('')
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   async function handleLogout() {
