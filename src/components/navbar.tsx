@@ -17,7 +17,7 @@ export default function Navbar() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) return
       const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', session.user.id).single()
+        .from('profiles').select('full_name').eq('id', session.user.id).maybeSingle()
       if (profile?.full_name) {
         setUserName(profile.full_name.split(' ')[0])
       }

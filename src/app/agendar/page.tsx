@@ -236,12 +236,13 @@ export default function AgendarPage() {
     })
   }
 
-  async function handleAgendar() {
+   async function handleAgendar() {
     if (!selectedProfessional || !selectedService || !selectedDate || !selectedTime) return
     if (!user) { router.push('/login'); return }
     setLoading(true)
     const supabase = createClient()
     const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00`)
+
     const { error } = await supabase.from('appointments').insert({
       client_id: user.id,
       service_id: selectedService,
@@ -249,7 +250,55 @@ export default function AgendarPage() {
       scheduled_at: scheduledAt.toISOString(),
       status: 'pending'
     })
-    if (!error) setSuccess(true)
+
+    if (!error) {
+      const { data: profile } = await supabase
+        .from('profiles').select('full_name, phone').eq('id', user.id).single()
+
+      const serviceData = services.find(s => s.id === selectedService)
+      const profData = professionals.find(p => p.id === selectedProfessional)
+      const endTime = new Date(scheduledAt.getTime() + (serviceData?.duration_minutes ?? 60) * 60000)
+
+      // Cria evento no Google Calendar da profissional
+      try {
+        await fetch('/api/calendar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            summary: `${serviceData?.name} — ${profile?.full_name ?? 'Cliente'}`,
+            description: `Serviço: ${serviceData?.name}\nCliente: ${profile?.full_name}\nTelefone: ${profile?.phone ?? 'Não informado'}`,
+            startTime: scheduledAt.toISOString(),
+            endTime: endTime.toISOString(),
+          })
+        })
+      } catch (err) {
+        console.error('Erro ao criar evento no calendar:', err)
+      }
+
+      // Envia email de confirmação com .ics para o cliente
+      try {
+        console.log('Enviando email para:', user.email)
+        const emailRes = await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientEmail: user.email,
+            clientName: profile?.full_name ?? 'Cliente',
+            serviceName: serviceData?.name,
+            professionalName: profData?.name,
+            startTime: scheduledAt.toISOString(),
+            endTime: endTime.toISOString(),
+          })
+        })
+        const emailData = await emailRes.json()
+        console.log('Resposta do email:', emailData)
+      } catch (err) {
+        console.error('Erro ao enviar email:', err)
+      }
+
+      setSuccess(true)
+    }
+
     setLoading(false)
   }
 

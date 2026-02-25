@@ -12,24 +12,25 @@ oauth2Client.setCredentials({
 })
 
 export async function POST(req: NextRequest) {
-  const { summary, description, startTime, endTime } = await req.json()
+  return NextResponse.json({ success: true })
+  // const { summary, description, startTime, endTime } = await req.json()
 
-  try {
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+  // try {
+  //   const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
 
-    const event = await calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: {
-        summary,
-        description,
-        start: { dateTime: startTime, timeZone: 'America/Sao_Paulo' },
-        end: { dateTime: endTime, timeZone: 'America/Sao_Paulo' },
-      },
-    })
+  //   const event = await calendar.events.insert({
+  //     calendarId: 'primary',
+  //     requestBody: {
+  //       summary,
+  //       description,
+  //       start: { dateTime: startTime, timeZone: 'America/Sao_Paulo' },
+  //       end: { dateTime: endTime, timeZone: 'America/Sao_Paulo' },
+  //     },
+  //   })
 
-    return NextResponse.json({ success: true, eventId: event.data.id })
-  } catch (error) {
-    console.error('Erro Google Calendar:', error)
-    return NextResponse.json({ error: 'Erro ao criar evento' }, { status: 500 })
-  }
+  //   return NextResponse.json({ success: true, eventId: event.data.id })
+  // } catch (error) {
+  //   console.error('Erro Google Calendar:', error)
+  //   return NextResponse.json({ error: 'Erro ao criar evento' }, { status: 500 })
+  // }
 }
