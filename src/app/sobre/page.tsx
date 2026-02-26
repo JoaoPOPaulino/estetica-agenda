@@ -125,14 +125,36 @@ export default function SobrePage() {
         .prof-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(139,58,58,0.12); }
 
         /* Foto grande no topo do card */
-        .card-photo {
-          width: 100%; aspect-ratio: 4/3;
-          background: linear-gradient(135deg, #F2D4CC, #E8B4A8);
-          overflow: hidden; position: relative;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 5rem;
-        }
-        .card-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+       /* Substitua o .card-photo e .card-photo img por isso: */
+
+      .card-photo {
+        display: flex;
+        justify-content: center;
+        padding: 2rem 1.5rem 0;
+        background: transparent;
+      }
+
+      .card-photo .avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        object-position: center top;
+        border: 3px solid rgba(196,120,106,0.3);
+        box-shadow: 0 4px 20px rgba(139,58,58,0.15);
+      }
+
+      .card-photo .avatar-placeholder {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #F2D4CC, #E8B4A8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        border: 3px solid rgba(196,120,106,0.3);
+      }
 
         .card-body { padding: 1.5rem; flex: 1; display: flex; flex-direction: column; }
 
@@ -216,9 +238,12 @@ export default function SobrePage() {
 
               return (
                 <div key={prof.id} className="prof-card">
-                  <div className="card-photo">
-                    {foto ? <img src={foto} alt={prof.name} /> : '🪷'}
-                  </div>
+                 <div className="card-photo">
+                  {foto
+                    ? <img className="avatar" src={foto} alt={prof.name} />
+                    : <div className="avatar-placeholder">🪷</div>
+                  }
+                </div>
                   <div className="card-body">
                     <h2 className="prof-name">{prof.name}</h2>
                     <p className="prof-role">Esteticista</p>
